@@ -31,7 +31,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, eval = FALS
 
 ## 2. Import and manipulate spatial data
 
-There are a few new R packages we will need to work with spatial data, listed below with hyperlinks and decribed in more detail throughout this and other lessons.
+There are a few new R packages we will need to work with spatial data, listed below with hyperlinks and described in more detail throughout this and other lessons.
 
 -   `sf` : working with vector data
 
