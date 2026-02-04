@@ -58,6 +58,8 @@ We're going to start off today with some distance calculations. Using our specie
 First, our `occ` object is not in a spatial format. We first need to bind our dataframes into a single one, and convert it to an `sf` object using `st_as_sf()` :
 
 ```{r}
+tmap_mode("view")
+
 occ_sp <- bind_rows(occ) %>% 
   st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
 ```
@@ -83,7 +85,10 @@ st_crs(rivers) == st_crs(occ_sp)
 The CRS of our objects do not match. Using what you learned in week one, conduct a spatial transformation to our `occ_sp` object to coerce it to the same CRS of our `rivers` object. Call the new object `occ_prj` and double check that `rivers` and our new occurrences object are in the same CRS after transforming. **(1 pt)**
 
 ```{r}
+occ_prj <- st_transform(occ_sp,st_crs(rivers))
 
+#check that they are the same
+st_crs(rivers) == st_crs(occ_prj)
 ```
 
 Now lets visualize our rivers and occurrence data:
@@ -103,7 +108,10 @@ Use `?st_filter` to explore the use of the function, and then use it to filter o
 *Note:* You will first need to `filter()` `counties` to just Larimer county, then use that object as the spatial filter. **(2 pts)**
 
 ```{r}
+larimer_county <- counties %>% filter(NAME == "Larimer") #snag larimer county
 
+#filter occ_prj points to larimer county
+occ_larimer <- st_filter(occ_prj,larimer_county)
 ```
 
 ```{r}
@@ -142,11 +150,35 @@ Cool, now you have the distance to the nearest river (in meters) for each indivi
 *Hint*: remember that the new distance column is a 'units' data type will throw an error when you try to plot those values. You will need to make use of `mutate()` and `as.numeric()` within your string of operations in order to complete task.
 
 ```{r}
+#first let us try to find the average distance for each species via dplyr
 
+# species_avg <- occ_larimer %>% 
+#   group_by(Species) %>% 
+#   mutate(num_river_dist_m = as.numeric(river_dist_m)) %>% 
+#   summarise(avg_river_dist_m = mean(num_river_dist_m,na.rm=TRUE))
+# 
+# #make plot
+# species_avg %>% 
+#   ggplot(aes(x=Species,y=avg_river_dist_m))+
+#   geom_bar(stat="identity")+
+#   labs(title = "Comparison of Avg. Distance Species are Found from rivers in Larimer County",
+#        y="Average Distance (m)")+
+#   theme_minimal()
 
+#could we do this as one whole chain?
+occ_larimer %>% 
+  group_by(Species) %>% 
+  mutate(num_river_dist_m = as.numeric(river_dist_m)) %>% 
+  summarise(avg_river_dist_m = mean(num_river_dist_m,na.rm=TRUE)) %>%
+  ggplot(aes(x=Species,y=avg_river_dist_m))+
+  geom_bar(stat="identity")+
+  labs(title = "Comparison of Avg. Distance Species are Found from Rivers in Larimer County",
+       y="Average Distance to Nearest River (m)")+
+  theme_minimal()
+  
 ```
 
-Which species is, on average, found closest to a river?
+Which species is, on average, found closest to a river? **Turns out, Elk!**
 
 ## Buffers
 
@@ -195,7 +227,7 @@ Now we can calculate what percentage of occurrences are within 100 m of a river 
 occ_rivers %>% 
   group_by(Species) %>% 
   summarise(total_occ = n(), 
-            total_rvier = sum(river_100m == TRUE),
+            total_river = sum(river_100m == TRUE),
             percent_river = (sum(river_100m == TRUE)/total_occ)*100) 
 ```
 
@@ -228,7 +260,13 @@ freq(landcover)
 Create a bar chart of landcover frequency, and order the bars highest to lowest (see [this resource](https://sebastiansauer.github.io/ordering-bars/) to guide you on sorting bars by a numeric variable/column). Also investigate the use of `coor_flip()` and how it might make your plot look better. **(1 pt).**
 
 ```{r}
-
+freq(landcover) %>% 
+  ggplot(aes(x=reorder(value,-count), y = count))+
+  geom_bar(stat="identity")+
+  labs(x="Landcover Values/Types",
+       y="Counts of Available Landcover")+
+  coord_flip()+
+  theme_minimal()
 ```
 
 Say we want to explore some habitat characteristics of our species of interest, and we are specifically interested in forest cover. We can use raster reclassification to create a new layer of just forest types in Colorado.
@@ -255,6 +293,7 @@ Now plot the new forest layer to get a quick sense if it looks accurate or not.
 ```{r}
 mapview(forest)
 ```
+
 
 ## Extraction Statistics
 
@@ -308,7 +347,8 @@ county_landcover <-
 Uh oh, this gives us the raw pixel values instead of the land cover classes. We can get a table of value - class pairs by using the `cats()` function:
 
 ```{r}
-classes <- as.data.frame(cats(landcover)) #coerce to a data frame because cats() actually returns it as a list
+classes <- as.data.frame(cats(landcover)) #coerce to a data frame because cats() 
+#actually returns it as a list
 ```
 
 Value and NLCD.Land.Cover.Class are our cell value - class pairs. Now we want to join this to our `county_landcover` object to get the actual land cover name.
@@ -318,7 +358,17 @@ Value and NLCD.Land.Cover.Class are our cell value - class pairs. Now we want to
 Perform the appropriate `*_join` operation to tie our `county_landcover` and `classes` data frames together. Then make a map of the counties each colored/filled by the most common NLCD land cover class. **(2 pts).**
 
 ```{r}
+#we are going to perform a left_join bc we want to keep our values in the county
+#landcover data frame. right join would leave us with the values in classes 
+county_landcover <- left_join(county_landcover,classes) %>% 
+  mutate(NLCD.Land.Cover.Class = as.factor(NLCD.Land.Cover.Class))
 
+#next we want to map the counties each colored/filled by the most common NLCD 
+#land cover class
+tm_shape(county_landcover)+
+ tm_fill("NLCD.Land.Cover.Class",
+           col.legend = tm_legend("NLCD Land Cover Classes")) +
+  tm_borders()
 ```
 
 ### Exercise #6
@@ -328,5 +378,23 @@ Find the average elevation each species occurs at (for all Colorado occurrences)
 *Hints*: Use the `elevation` and `occ_prj` objects we have created or read in above. Remember to check the CRS and perform a spatial transformation if necessary! All parts needed to answer this question have been introduced in this lesson plan. **(2 pts).**
 
 ```{r}
+crs(elevation)==crs(occ_prj) #crap, different CRS, let's fix that first
 
+#convert elevation to right crs (note raster objects use project())
+elevation_prj = project(elevation, crs(occ_prj))
+
+crs(elevation_prj) == crs(occ_prj) #fixed!
+
+#next, we need to figure out how to manipulate and extract values to answer the question
+occ_elevation <- occ_prj %>% 
+  mutate(elevation = extract(elevation_prj, occ_prj)) %>% 
+  unnest(elevation) %>% 
+  group_by(Species) %>%  #find average elevation for each species
+  summarise(Avg_Elevation = mean(Elevation,na.rm=TRUE)) 
+
+paste0("The species found at the highest elevation in CO. on average is the ",
+       occ_elevation$Species[which.max(occ_elevation$Avg_Elevation)], 
+       " with an average elevation of ",
+       round(max(occ_elevation$Avg_Elevation),4),
+       " meters.")
 ```
