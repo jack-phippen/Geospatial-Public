@@ -353,6 +353,14 @@ reloaded_raster <- rast("data/poudre_elevation.tif")
     **Then, use `extract()` to get the elevation (using the `co_elevation_crop` object created in the lesson) at each of the three points in `poudre_points_prj` ? (2 pts)**
 
     ```{r}
+#?terra::extract
+  poudre_points_elev <- extract(co_elevation_terra,poudre_points_prj)
+  names(poudre_points_elev) <- c("Location", "Elevation(m)")
+  
+  #fix names 
+  poudre_points_elev$Location <- c("Mishawaka", "Rustic", "Blue Lake Trailhead")
+  
+  kableExtra::kable(poudre_points_elev,caption = "Elevation (m) of Select Locations Along Poudre Highway")
 
     ```
 
@@ -361,23 +369,56 @@ reloaded_raster <- rast("data/poudre_elevation.tif")
 Import the county boundaries for your state:
 
 ```{r}
+ut_counties <- counties(state="UT")
 
+qtm(ut_counties)
 ```
 
 Import elevation for your state (using your new counties object as the extent/bounding box and set `z = 7`):
 
 ```{r}
+ut_elevation <- get_elev_raster(ut_counties,z=7)
 
+tm_shape(ut_elevation)+
+  tm_raster(col.scale = tm_scale_continuous(), 
+            col.legend = tm_legend("Elevation (m)"))
 ```
 
 Create an interactive map of your state counties and the elevation layer underneath (*note:* compare the use of `tm_polygons()` vs. `tm_borders()` for mapping polygons. Which works better in this case for showing multiple spatial layers?).
 
 ```{r}
+tm_shape(ut_elevation)+
+   tm_raster(col.scale = tm_scale_continuous(), 
+            col.legend = tm_legend("Elevation (m)"))+
+  tm_shape(ut_counties)+
+  tm_borders() #tm borders is SEE THROUGH! 
 
+# #could I do this out of order?
+# tm_shape(ut_counties)+
+#   tm_polygons()+
+#   tm_shape(ut_elevation)+ 
+#   tm_raster(col.scale = tm_scale_continuous(), 
+#             col.legend = tm_legend("Elevation (m)"))
+
+#short answer: No. Must build layer by layer
 ```
 
 Choose a single county within your state county object, and crop your elevation layer to the extent of that county (*note:* first use `filter()` to create an object of just your selected county that you want to crop to). Follow the steps above we used to crop co_elevation to the poudre hwy.
 
 ```{r}
+#select desired county
+ut_county <- ut_counties %>% filter(NAME == "Utah")
 
+#convert elevation to right type
+ut_elevation <- ut_elevation %>% rast()
+
+#crop elevation layer to that county
+ut_elevation_crop <- crop(ut_elevation,ut_county)
+
+#quickly show that picture
+tm_shape(ut_elevation_crop)+
+   tm_raster(col.scale = tm_scale_continuous(), 
+            col.legend = tm_legend("Elevation (m)"))+
+  tm_shape(ut_county)+
+  tm_borders()
 ```
